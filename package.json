@@ -1,0 +1,33 @@
+{
+  "name": "stt-tuning-console",
+  "version": "1.0.0",
+  "private": true,
+  "description": "OpenAI Realtime STT tuning console for parameter optimization and grading validation",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev:server & npm run dev:web",
+    "dev:web": "npm run dev -w @stt-console/web",
+    "dev:server": "npm run dev -w @stt-console/server",
+    "build": "npm run build -w @stt-console/web && npm run build -w @stt-console/server",
+    "build:web": "npm run build -w @stt-console/web",
+    "build:server": "npm run build -w @stt-console/server",
+    "lint": "npm run lint --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "clean": "rm -rf node_modules apps/*/node_modules apps/*/dist"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "openai",
+    "realtime",
+    "stt",
+    "speech-to-text",
+    "tuning",
+    "console"
+  ],
+  "author": "Eugene",
+  "license": "UNLICENSED"
+}
