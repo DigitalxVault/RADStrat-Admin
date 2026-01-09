@@ -41,6 +41,7 @@ router.get('/', async (_req: Request, res: Response) => {
 
     // Create transcription session with OpenAI
     // Uses /v1/realtime/transcription_sessions for pure transcription (no AI responses)
+    // NOTE: Using the documented nested audio.input format for transcription sessions
     const response = await fetch('https://api.openai.com/v1/realtime/transcription_sessions', {
       method: 'POST',
       headers: {
@@ -48,19 +49,27 @@ router.get('/', async (_req: Request, res: Response) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        input_audio_format: 'pcm16',
-        input_audio_transcription: {
-          model: 'gpt-4o-transcribe',
-          language: 'en'
-        },
-        turn_detection: {
-          type: 'server_vad',
-          threshold: 0.3,           // Sensitive but not too noisy
-          prefix_padding_ms: 500,   // Context before speech detection
-          silence_duration_ms: 2000 // Wait 2 seconds - allows natural pauses in speech
-        },
-        input_audio_noise_reduction: {
-          type: 'near_field'
+        // New nested format per transcription session docs
+        audio: {
+          input: {
+            format: {
+              type: 'audio/pcm',
+              rate: 24000
+            },
+            transcription: {
+              model: 'gpt-4o-transcribe',
+              language: 'en'
+            },
+            turn_detection: {
+              type: 'server_vad',
+              threshold: 0.3,           // Sensitive but not too noisy
+              prefix_padding_ms: 500,   // Context before speech detection
+              silence_duration_ms: 2000 // Wait 2 seconds - allows natural pauses in speech
+            },
+            noise_reduction: {
+              type: 'near_field'
+            }
+          }
         }
       }),
     });

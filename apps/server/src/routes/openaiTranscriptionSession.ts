@@ -23,7 +23,7 @@ interface GASessionResponse {
 // The transcription model is determined automatically by OpenAI.
 // See: https://platform.openai.com/docs/guides/realtime
 
-router.post('/', async (_req: Request, res: Response) => {
+router.get('/', async (_req: Request, res: Response) => {
   const startTime = Date.now();
 
   try {
@@ -96,12 +96,13 @@ router.post('/', async (_req: Request, res: Response) => {
 
     // Return only what the client needs (never expose the full API key)
     // GA API structure: value/expires_at at root, session.id for session ID
+    // IMPORTANT: Use camelCase field names to match frontend expectations
     res.json({
-      client_secret: data.value,           // Token is at root level
-      expires_at: data.expires_at,          // Expiry is at root level
-      session_id: data.session?.id,         // Session ID is in session object
-      latency_ms: latencyMs
-      // NOTE: Model is NOT returned - OpenAI determines it for transcription sessions
+      sessionId: data.session?.id,
+      clientSecret: data.value,
+      expiresAt: data.expires_at,
+      model: 'gpt-4o-mini-transcribe',
+      latencyMs
     });
 
   } catch (error) {

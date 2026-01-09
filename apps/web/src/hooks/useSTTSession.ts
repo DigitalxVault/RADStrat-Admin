@@ -92,6 +92,11 @@ export function useSTTSession(onRunComplete?: (run: TestRun) => void): UseSTTSes
   const isRecordingRef = useRef<boolean>(false);
   const sessionReadyRef = useRef<boolean>(false); // Track if OpenAI session is ready
 
+  // Transcript refs - always hold current values to avoid stale closures in stopSession
+  const finalTranscriptRef = useRef<string>('');
+  const interimTranscriptRef = useRef<string>('');
+  const finalizeResolveRef = useRef<(() => void) | null>(null); // Fires when transcription completes
+
   // Pre-connection state
   const preConnectedRef = useRef<boolean>(false);
   const preConnectedWsRef = useRef<WebSocket | null>(null);
@@ -301,10 +306,11 @@ export function useSTTSession(onRunComplete?: (run: TestRun) => void): UseSTTSes
     const wsUrl = 'wss://api.openai.com/v1/realtime?intent=transcription';
 
     // Connect using subprotocols for authentication
+    // NOTE: For GA API, we must NOT include 'openai-beta.realtime-v1' header
+    // That header is only for beta API and causes version mismatch with GA client secrets
     const ws = new WebSocket(wsUrl, [
       'realtime',
-      `openai-insecure-api-key.${tokenData.clientSecret}`,
-      'openai-beta.realtime-v1'
+      `openai-insecure-api-key.${tokenData.clientSecret}`
     ]);
 
     // Wait for WebSocket to open AND session to be created
@@ -325,7 +331,9 @@ export function useSTTSession(onRunComplete?: (run: TestRun) => void): UseSTTSes
           const event = JSON.parse(e.data);
           console.log('[WebSocket] Setup event:', event.type);
 
-          if (event.type === 'transcription_session.created') {
+          // GA API sends 'session.created', beta API sends 'transcription_session.created'
+          const isSessionCreated = event.type === 'transcription_session.created' || event.type === 'session.created';
+          if (isSessionCreated) {
             clearTimeout(timeout);
             sessionReadyRef.current = true;
             console.log('[WebSocket] ✅ Session ready! Config:', {
@@ -608,12 +616,32 @@ export function useSTTSession(onRunComplete?: (run: TestRun) => void): UseSTTSes
           console.log('[WebSocket] Pre-connection event:', event.type);
 
           // Track session readiness for pre-connection too
-          if (event.type === 'transcription_session.created') {
+          // GA API sends 'session.created', beta API sends 'transcription_session.created'
+          const isSessionCreated = event.type === 'transcription_session.created' || event.type === 'session.created';
+          if (isSessionCreated) {
             sessionReadyRef.current = true;
             console.log('[WebSocket] Pre-connection session ready:', {
               id: event.session?.id,
               input_audio_format: event.session?.input_audio_format
             });
+
+            // CRITICAL: Send session.update for pre-connection too
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({
+                type: 'session.update',
+                session: {
+                  audio: {
+                    input: {
+                      transcription: {
+                        model: 'gpt-4o-mini-transcribe',
+                        language: 'en'
+                      }
+                    }
+                  }
+                }
+              }));
+              console.log('[WebSocket] ✅ Pre-connection session.update sent');
+            }
           }
         } catch (err) {
           console.warn('[WebSocket] Failed to parse pre-connection event:', e.data);
@@ -649,6 +677,11 @@ export function useSTTSession(onRunComplete?: (run: TestRun) => void): UseSTTSes
       setFinalTranscript('');
       setScoreResult(null);
       setTelemetry({});
+
+      // Reset transcript refs for new session
+      finalTranscriptRef.current = '';
+      interimTranscriptRef.current = '';
+      finalizeResolveRef.current = null;
 
       questionRef.current = question;
       profileRef.current = profile;
@@ -716,9 +749,30 @@ export function useSTTSession(onRunComplete?: (run: TestRun) => void): UseSTTSes
           }
 
           switch (event.type) {
-            // Session events
+            // Session events - GA API sends 'session.created', beta sends 'transcription_session.created'
+            case 'session.created':
             case 'transcription_session.created':
-              console.log('[WebSocket] ✅ Transcription session created:', event.session);
+              console.log('[WebSocket] ✅ Session created:', event.session);
+
+              // CRITICAL: Send session.update to finalize transcription config
+              // GA workflow requires this for transcription events to be received
+              console.log('[WebSocket] Sending session.update to finalize config...');
+              if (ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                  type: 'session.update',
+                  session: {
+                    audio: {
+                      input: {
+                        transcription: {
+                          model: 'gpt-4o-mini-transcribe',
+                          language: 'en'
+                        }
+                      }
+                    }
+                  }
+                }));
+                console.log('[WebSocket] ✅ session.update sent');
+              }
               break;
 
             case 'transcription_session.updated':
@@ -755,7 +809,11 @@ export function useSTTSession(onRunComplete?: (run: TestRun) => void): UseSTTSes
                 setTelemetry(prev => ({ ...prev, timeToFirstTextMs: firstTextTimeRef.current }));
               }
               if (event.delta) {
-                setInterimTranscript(prev => prev + event.delta);
+                setInterimTranscript(prev => {
+                  const next = prev + event.delta;
+                  interimTranscriptRef.current = next; // Sync ref for stopSession
+                  return next;
+                });
               }
               break;
 
@@ -765,12 +823,21 @@ export function useSTTSession(onRunComplete?: (run: TestRun) => void): UseSTTSes
               if (event.transcript) {
                 setFinalTranscript(prev => {
                   const separator = prev && event.transcript ? ' ' : '';
-                  return prev + separator + event.transcript;
+                  const next = prev + separator + event.transcript;
+                  finalTranscriptRef.current = next; // Sync ref for stopSession
+                  return next;
                 });
+                interimTranscriptRef.current = ''; // Clear interim ref
                 setInterimTranscript('');
 
                 const timeToFinal = Date.now() - startTimeRef.current;
                 setTelemetry(prev => ({ ...prev, timeToFinalMs: timeToFinal }));
+              }
+              // Fire the finalization resolver if stopSession is waiting
+              if (finalizeResolveRef.current) {
+                console.log('[WebSocket] Resolving finalization promise');
+                finalizeResolveRef.current();
+                finalizeResolveRef.current = null;
               }
               break;
 
@@ -863,14 +930,21 @@ export function useSTTSession(onRunComplete?: (run: TestRun) => void): UseSTTSes
       }
     }
 
-    // Wait for final transcription to complete
+    // Wait for final transcription to complete (or timeout after 5s)
     console.log('[WebSocket] Waiting for transcription to finalize...');
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    await Promise.race([
+      new Promise<void>(resolve => {
+        finalizeResolveRef.current = resolve;
+      }),
+      new Promise<void>(resolve => setTimeout(resolve, 5000)) // 5s fallback for network issues
+    ]);
+    finalizeResolveRef.current = null; // Clear in case timeout won
 
     cleanup();
 
-    // Score the transcript
-    const transcript = [finalTranscript, interimTranscript].filter(Boolean).join(' ').trim();
+    // Score the transcript - read from refs to get latest values (avoids stale closure)
+    const transcript = [finalTranscriptRef.current, interimTranscriptRef.current].filter(Boolean).join(' ').trim();
+    console.log('[WebSocket] Final transcript from refs:', transcript);
     if (transcript) {
       try {
         const result = await scoreTranscript(

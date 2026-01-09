@@ -30,7 +30,8 @@ app.use((req, _res, next) => {
 // Routes
 app.use('/api/health', healthRouter);
 app.use('/api/openai/realtime/transcription-session', transcriptionSessionRouter);
-app.use('/api/webrtc/session', webrtcSessionRouter);
+// Use GA transcription session router (replaces legacy webrtcSessionRouter)
+app.use('/api/webrtc/session', transcriptionSessionRouter);
 app.use('/api/evaluator', evaluatorRouter);
 
 // 404 handler
