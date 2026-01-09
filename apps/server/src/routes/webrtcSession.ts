@@ -55,9 +55,9 @@ router.get('/', async (_req: Request, res: Response) => {
         },
         turn_detection: {
           type: 'server_vad',
-          threshold: 0.5,
-          prefix_padding_ms: 300,
-          silence_duration_ms: 500
+          threshold: 0.3,           // Sensitive but not too noisy
+          prefix_padding_ms: 500,   // Context before speech detection
+          silence_duration_ms: 2000 // Wait 2 seconds - allows natural pauses in speech
         },
         input_audio_noise_reduction: {
           type: 'near_field'
