@@ -90,6 +90,7 @@ export function useSTTSession(onRunComplete?: (run: TestRun) => void): UseSTTSes
   const firstTextTimeRef = useRef<number>(0);
   const recordingStartTimeRef = useRef<number>(0);
   const isRecordingRef = useRef<boolean>(false);
+  const sessionReadyRef = useRef<boolean>(false); // Track if OpenAI session is ready
 
   // Pre-connection state
   const preConnectedRef = useRef<boolean>(false);
@@ -106,6 +107,7 @@ export function useSTTSession(onRunComplete?: (run: TestRun) => void): UseSTTSes
   const cleanup = useCallback(() => {
     console.log('[WebSocket] Cleaning up resources');
     isRecordingRef.current = false;
+    sessionReadyRef.current = false;
 
     // Close worklet node
     if (workletNodeRef.current) {
@@ -305,22 +307,55 @@ export function useSTTSession(onRunComplete?: (run: TestRun) => void): UseSTTSes
       'openai-beta.realtime-v1'
     ]);
 
-    // Wait for WebSocket to open
+    // Wait for WebSocket to open AND session to be created
     await new Promise<void>((resolve, reject) => {
       const timeout = setTimeout(() => {
         reject(new Error('WebSocket connection timeout'));
-      }, 10000);
+      }, 15000); // Increased timeout to allow for session creation
+
+      let wsOpened = false;
 
       ws.onopen = () => {
-        clearTimeout(timeout);
-        console.log('[WebSocket] Connected to OpenAI');
-        resolve();
+        console.log('[WebSocket] WebSocket connected, waiting for transcription_session.created...');
+        wsOpened = true;
+      };
+
+      ws.onmessage = (e) => {
+        try {
+          const event = JSON.parse(e.data);
+          console.log('[WebSocket] Setup event:', event.type);
+
+          if (event.type === 'transcription_session.created') {
+            clearTimeout(timeout);
+            sessionReadyRef.current = true;
+            console.log('[WebSocket] ✅ Session ready! Config:', {
+              id: event.session?.id,
+              input_audio_format: event.session?.input_audio_format,
+              model: event.session?.input_audio_transcription?.model,
+              turn_detection: event.session?.turn_detection?.type
+            });
+            resolve();
+          } else if (event.type === 'error') {
+            clearTimeout(timeout);
+            console.error('[WebSocket] Session error:', event.error);
+            reject(new Error(event.error?.message || 'Session creation failed'));
+          }
+        } catch (err) {
+          console.warn('[WebSocket] Failed to parse setup event:', e.data);
+        }
       };
 
       ws.onerror = (err) => {
         clearTimeout(timeout);
         console.error('[WebSocket] Connection error:', err);
         reject(new Error('WebSocket connection failed'));
+      };
+
+      ws.onclose = (e) => {
+        if (!wsOpened) {
+          clearTimeout(timeout);
+          reject(new Error(`WebSocket closed before opening: ${e.code} ${e.reason}`));
+        }
       };
     });
 
@@ -368,6 +403,12 @@ export function useSTTSession(onRunComplete?: (run: TestRun) => void): UseSTTSes
 
     scriptProcessor.onaudioprocess = (e) => {
       if (!isRecordingRef.current || ws.readyState !== WebSocket.OPEN) {
+        return;
+      }
+
+      // CRITICAL: Only send audio after session is confirmed ready
+      if (!sessionReadyRef.current) {
+        console.log('[WebSocket] Skipping audio - session not ready yet');
         return;
       }
 
@@ -458,6 +499,11 @@ export function useSTTSession(onRunComplete?: (run: TestRun) => void): UseSTTSes
           sampleMax = Math.max(sampleMax, sample);
         }
 
+        // Verify base64 by decoding and checking
+        const testDecode = atob(base64Audio);
+        const decodedLength = testDecode.length;
+        const firstDecodedBytes = Array.from(testDecode.slice(0, 10)).map(c => c.charCodeAt(0).toString(16).padStart(2, '0')).join(' ');
+
         console.log(`[WebSocket] First audio chunk details:`, {
           inputSamples: inputData.length,
           resampledSamples: resampled.length,
@@ -470,8 +516,17 @@ export function useSTTSession(onRunComplete?: (run: TestRun) => void): UseSTTSes
           nonZeroSampleCount: nonZeroCount,
           sampleMin,
           sampleMax,
-          wsReadyState: ['CONNECTING', 'OPEN', 'CLOSING', 'CLOSED'][ws.readyState]
+          wsReadyState: ['CONNECTING', 'OPEN', 'CLOSING', 'CLOSED'][ws.readyState],
+          // Verify base64 round-trip
+          decodedLength,
+          firstDecodedBytes,
+          bytesMatch: decodedLength === pcm16Bytes.length,
+          // Show actual base64 prefix
+          base64Prefix: base64Audio.substring(0, 50)
         });
+
+        // Log WebSocket buffer status
+        console.log(`[WebSocket] Buffer before send: ${ws.bufferedAmount} bytes`);
       }
 
       // Send to OpenAI
@@ -481,13 +536,26 @@ export function useSTTSession(onRunComplete?: (run: TestRun) => void): UseSTTSes
       });
 
       try {
+        const bufferBefore = ws.bufferedAmount;
         ws.send(payload);
+        const bufferAfter = ws.bufferedAmount;
 
         // Log periodically to verify data is going out
         if (audioChunkCount <= 5 || audioChunkCount % 30 === 0) {
           const numSamples = pcm16Bytes.length / 2;
           const durationMs = (numSamples / TARGET_SAMPLE_RATE) * 1000;
-          console.log(`[WebSocket] Sent chunk #${audioChunkCount}: ${payload.length} bytes, ${durationMs.toFixed(1)}ms of audio`);
+          console.log(`[WebSocket] Sent chunk #${audioChunkCount}: ${payload.length} bytes, ${durationMs.toFixed(1)}ms of audio, buffer: ${bufferBefore}->${bufferAfter}`);
+        }
+
+        // Log the actual payload structure for first chunk
+        if (audioChunkCount === 1) {
+          const parsedPayload = JSON.parse(payload);
+          console.log('[WebSocket] First payload structure:', {
+            type: parsedPayload.type,
+            audioFieldType: typeof parsedPayload.audio,
+            audioLength: parsedPayload.audio?.length,
+            payloadLength: payload.length
+          });
         }
       } catch (err) {
         console.error(`[WebSocket] Failed to send chunk #${audioChunkCount}:`, err);
@@ -538,6 +606,15 @@ export function useSTTSession(onRunComplete?: (run: TestRun) => void): UseSTTSes
         try {
           const event = JSON.parse(e.data);
           console.log('[WebSocket] Pre-connection event:', event.type);
+
+          // Track session readiness for pre-connection too
+          if (event.type === 'transcription_session.created') {
+            sessionReadyRef.current = true;
+            console.log('[WebSocket] Pre-connection session ready:', {
+              id: event.session?.id,
+              input_audio_format: event.session?.input_audio_format
+            });
+          }
         } catch (err) {
           console.warn('[WebSocket] Failed to parse pre-connection event:', e.data);
         }
@@ -699,8 +776,16 @@ export function useSTTSession(onRunComplete?: (run: TestRun) => void): UseSTTSes
 
             case 'error':
               console.error('[WebSocket] Error event:', event.error);
-              setError(event.error?.message || 'Unknown error');
-              setStatus('error');
+              // Don't treat "buffer too small" as a fatal error - this happens when
+              // we manually commit but VAD has already committed (buffer is empty)
+              const errorCode = event.error?.code;
+              const errorMsg = event.error?.message || 'Unknown error';
+              if (errorCode === 'input_audio_buffer_commit_empty') {
+                console.log('[WebSocket] Ignoring empty buffer commit error (VAD already committed)');
+              } else {
+                setError(errorMsg);
+                setStatus('error');
+              }
               break;
 
             default:
@@ -763,12 +848,19 @@ export function useSTTSession(onRunComplete?: (run: TestRun) => void): UseSTTSes
     const audioDurationMs = Date.now() - recordingStartTimeRef.current;
     console.log('[WebSocket] Stopping session:', { audioDurationMs });
 
-    // Send commit to finalize any pending audio
+    // Note: With server VAD enabled, the audio buffer is automatically committed
+    // when speech stops. We don't need to manually commit here.
+    // If we do commit and the buffer is empty (already committed by VAD),
+    // we'll get an error which we can safely ignore.
     if (wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({
-        type: 'input_audio_buffer.commit'
-      }));
-      console.log('[WebSocket] Sent input_audio_buffer.commit');
+      try {
+        wsRef.current.send(JSON.stringify({
+          type: 'input_audio_buffer.commit'
+        }));
+        console.log('[WebSocket] Sent input_audio_buffer.commit (may already be committed by VAD)');
+      } catch (err) {
+        console.log('[WebSocket] Could not send commit (connection may be closing)');
+      }
     }
 
     // Wait for final transcription to complete
