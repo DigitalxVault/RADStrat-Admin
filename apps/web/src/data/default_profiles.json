@@ -1,0 +1,118 @@
+{
+  "profiles": [
+    {
+      "id": "near-fetch",
+      "name": "Near Fetch",
+      "description": "Optimized for near-field voice capture (headset, close mic). Lower tolerance for background noise artifacts.",
+      "weights": {
+        "accuracy": 0.5,
+        "fluency": 0.3,
+        "structure": 0.2
+      },
+      "fluency": {
+        "fillerWords": ["um", "uh", "er", "ah", "like", "you know", "so", "basically", "actually", "literally"],
+        "fillerPenaltyPerWord": 2,
+        "fillerPenaltyCap": 15,
+        "pauseThresholdMs": 500,
+        "longPauseThresholdMs": 1500,
+        "pausePenalty": 1,
+        "longPausePenalty": 3
+      },
+      "normalization": {
+        "digitWordEquivalence": true,
+        "rtNumberVariants": true,
+        "ignorePunctuation": true
+      },
+      "benchmarks": {
+        "passMarkOverall": 70,
+        "minPerSection": {
+          "accuracy": 60,
+          "fluency": 50,
+          "structure": 50
+        }
+      },
+      "evaluator": {
+        "model": "gpt-4o-mini",
+        "temperature": 0.3,
+        "scoringPromptTemplate": "You are an expert evaluator for radio/telephone communication training. Evaluate the student's spoken response against the expected answer.\n\nScoring Criteria:\n- accuracyScore (0-100): How well does the content match? Consider semantic meaning, not just exact words. Apply normalization rules.\n- fluencyScore (0-100): Speech clarity and flow. Penalize filler words and long pauses.\n- structureScore (0-100): Proper communication format (receiver callsign, sender callsign, message structure).\n- overallScore: Weighted average using provided weights.\n\nOutput JSON with: accuracyScore, fluencyScore, structureScore, overallScore, passed (boolean), and reasons object with arrays for accuracy, fluency, structure explaining deductions.",
+        "explanationPromptTemplate": "For each score below 100, provide specific actionable feedback explaining what was missing or incorrect. Be constructive and educational."
+      }
+    },
+    {
+      "id": "far-fetch",
+      "name": "Far Fetch",
+      "description": "Optimized for far-field voice capture (speaker, room mic). More tolerant of ambient noise and echo artifacts.",
+      "weights": {
+        "accuracy": 0.6,
+        "fluency": 0.2,
+        "structure": 0.2
+      },
+      "fluency": {
+        "fillerWords": ["um", "uh", "er", "ah", "like", "you know", "so", "basically"],
+        "fillerPenaltyPerWord": 1.5,
+        "fillerPenaltyCap": 10,
+        "pauseThresholdMs": 750,
+        "longPauseThresholdMs": 2000,
+        "pausePenalty": 0.5,
+        "longPausePenalty": 2
+      },
+      "normalization": {
+        "digitWordEquivalence": true,
+        "rtNumberVariants": true,
+        "ignorePunctuation": true
+      },
+      "benchmarks": {
+        "passMarkOverall": 65,
+        "minPerSection": {
+          "accuracy": 55,
+          "fluency": 40,
+          "structure": 45
+        }
+      },
+      "evaluator": {
+        "model": "gpt-4o-mini",
+        "temperature": 0.3,
+        "scoringPromptTemplate": "You are an expert evaluator for radio/telephone communication training. Evaluate the student's spoken response against the expected answer.\n\nScoring Criteria:\n- accuracyScore (0-100): How well does the content match? Consider semantic meaning, not just exact words. Apply normalization rules. Be more lenient with minor transcription errors due to far-field capture.\n- fluencyScore (0-100): Speech clarity and flow. Penalize excessive filler words and very long pauses only.\n- structureScore (0-100): Proper communication format (receiver callsign, sender callsign, message structure).\n- overallScore: Weighted average using provided weights.\n\nOutput JSON with: accuracyScore, fluencyScore, structureScore, overallScore, passed (boolean), and reasons object with arrays for accuracy, fluency, structure explaining deductions.",
+        "explanationPromptTemplate": "For each score below 100, provide specific actionable feedback explaining what was missing or incorrect. Be constructive and educational. Consider that far-field audio may have transcription artifacts."
+      }
+    },
+    {
+      "id": "strict",
+      "name": "Strict Evaluation",
+      "description": "High standards for professional certification. Minimal tolerance for errors.",
+      "weights": {
+        "accuracy": 0.4,
+        "fluency": 0.3,
+        "structure": 0.3
+      },
+      "fluency": {
+        "fillerWords": ["um", "uh", "er", "ah", "like", "you know", "so", "basically", "actually", "literally", "right", "okay"],
+        "fillerPenaltyPerWord": 3,
+        "fillerPenaltyCap": 20,
+        "pauseThresholdMs": 400,
+        "longPauseThresholdMs": 1000,
+        "pausePenalty": 2,
+        "longPausePenalty": 5
+      },
+      "normalization": {
+        "digitWordEquivalence": true,
+        "rtNumberVariants": true,
+        "ignorePunctuation": false
+      },
+      "benchmarks": {
+        "passMarkOverall": 80,
+        "minPerSection": {
+          "accuracy": 75,
+          "fluency": 70,
+          "structure": 70
+        }
+      },
+      "evaluator": {
+        "model": "gpt-4o",
+        "temperature": 0.2,
+        "scoringPromptTemplate": "You are a strict expert evaluator for professional radio/telephone communication certification. Apply rigorous standards.\n\nScoring Criteria:\n- accuracyScore (0-100): Exact content match required. Minor variations acceptable only if meaning is preserved perfectly.\n- fluencyScore (0-100): Professional speech quality. No filler words, clear pronunciation, appropriate pacing.\n- structureScore (0-100): Perfect adherence to communication protocol format.\n- overallScore: Weighted average using provided weights.\n\nOutput JSON with: accuracyScore, fluencyScore, structureScore, overallScore, passed (boolean), and reasons object with arrays for accuracy, fluency, structure explaining all deductions in detail.",
+        "explanationPromptTemplate": "Provide detailed professional feedback for certification preparation. Explain exactly what needs improvement to meet professional standards."
+      }
+    }
+  ]
+}
