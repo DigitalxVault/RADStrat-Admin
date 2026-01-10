@@ -42,7 +42,7 @@ router.get('/', async (_req: Request, res: Response) => {
     // Create transcription session with OpenAI
     // Uses /v1/realtime/transcription_sessions for pure transcription (no AI responses)
     // NOTE: Using the documented nested audio.input format for transcription sessions
-    const response = await fetch('https://api.openai.com/v1/realtime/transcription_sessions', {
+    const fetchRes = await fetch('https://api.openai.com/v1/realtime/transcription_sessions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${env.OPENAI_API_KEY}`,
@@ -74,20 +74,20 @@ router.get('/', async (_req: Request, res: Response) => {
       }),
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
+    if (!fetchRes.ok) {
+      const errorText = await fetchRes.text();
       logger.error('OpenAI transcription session creation failed', {
-        status: response.status,
+        status: fetchRes.status,
         error: errorText
       });
-      res.status(response.status).json({
+      res.status(fetchRes.status).json({
         error: 'Failed to create transcription session',
         details: errorText
       });
       return;
     }
 
-    const sessionData = await response.json() as TranscriptionSessionResponse;
+    const sessionData = await fetchRes.json() as TranscriptionSessionResponse;
     const latencyMs = Date.now() - startTime;
 
     logger.info('Ephemeral token created successfully', {

@@ -129,7 +129,7 @@ ${body.explanationPrompt}
 
 Provide your evaluation as JSON only, no other text.`;
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    const fetchRes = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${env.OPENAI_API_KEY}`,
@@ -146,17 +146,17 @@ Provide your evaluation as JSON only, no other text.`;
       }),
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      logger.error('OpenAI API error', { status: response.status, error: errorText });
-      res.status(response.status).json({
+    if (!fetchRes.ok) {
+      const errorText = await fetchRes.text();
+      logger.error('OpenAI API error', { status: fetchRes.status, error: errorText });
+      res.status(fetchRes.status).json({
         error: 'Failed to evaluate response',
         details: errorText
       });
       return;
     }
 
-    const data = await response.json() as {
+    const data = await fetchRes.json() as {
       choices: Array<{ message: { content: string } }>;
       usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
     };

@@ -33,7 +33,7 @@ router.get('/', async (_req: Request, res: Response) => {
     logger.info('Creating GA transcription session...');
 
     // GA API: Use /v1/realtime/client_secrets endpoint with nested session structure
-    const response = await fetch('https://api.openai.com/v1/realtime/client_secrets', {
+    const fetchRes = await fetch('https://api.openai.com/v1/realtime/client_secrets', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${env.OPENAI_API_KEY}`,
@@ -73,17 +73,17 @@ router.get('/', async (_req: Request, res: Response) => {
       }),
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      logger.error('OpenAI API error', { status: response.status, error: errorText });
-      res.status(response.status).json({
+    if (!fetchRes.ok) {
+      const errorText = await fetchRes.text();
+      logger.error('OpenAI API error', { status: fetchRes.status, error: errorText });
+      res.status(fetchRes.status).json({
         error: 'Failed to create transcription session',
         details: errorText
       });
       return;
     }
 
-    const data = await response.json() as GASessionResponse;
+    const data = await fetchRes.json() as GASessionResponse;
     const latencyMs = Date.now() - startTime;
 
     logger.info('GA Transcription session created', {
