@@ -904,12 +904,16 @@ export function useSTTSession(onRunComplete?: (run: TestRun) => void): UseSTTSes
               // Final transcription for this turn
               console.log('[WebSocket] ✅ Transcription completed:', event.transcript);
               if (event.transcript) {
-                setFinalTranscript(prev => {
-                  const separator = prev && event.transcript ? ' ' : '';
-                  const next = prev + separator + event.transcript;
-                  finalTranscriptRef.current = next; // Sync ref for stopSession
-                  return next;
-                });
+                // Update ref SYNCHRONOUSLY before setState to avoid race condition
+                // The ref must be updated before finalizeResolveRef is called below,
+                // since stopSession reads from the ref immediately after the promise resolves
+                const currentTranscript = finalTranscriptRef.current;
+                const separator = currentTranscript && event.transcript ? ' ' : '';
+                const newTranscript = currentTranscript + separator + event.transcript;
+                finalTranscriptRef.current = newTranscript;
+
+                // Now update React state (this is async but we don't need to wait for it)
+                setFinalTranscript(newTranscript);
                 interimTranscriptRef.current = ''; // Clear interim ref
                 setInterimTranscript('');
 
