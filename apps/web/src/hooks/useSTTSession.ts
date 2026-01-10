@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import type { Question, Profile, ScoreResult, TestRun, RunTelemetry, FluencyMetrics } from '../types';
 import { normalizeText } from '../utils/textNormalization';
 import { estimateFluencyMetrics } from '../utils/fluencyMetrics';
+import { api } from '../config';
 
 type SessionStatus = 'idle' | 'connecting' | 'connected' | 'recording' | 'processing' | 'error';
 
@@ -221,7 +222,7 @@ export function useSTTSession(onRunComplete?: (run: TestRun) => void): UseSTTSes
       temperature: profile.evaluator.temperature
     };
 
-    const response = await fetch('/api/evaluator/score', {
+    const response = await fetch(api.evaluatorScore, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(requestPayload)
@@ -259,7 +260,7 @@ export function useSTTSession(onRunComplete?: (run: TestRun) => void): UseSTTSes
 
     // Step 1: Get ephemeral token from our server
     console.log('[WebSocket] Requesting ephemeral token...');
-    const tokenResponse = await fetch('/api/webrtc/session', {
+    const tokenResponse = await fetch(api.webrtcSession, {
       method: 'GET',
     });
 

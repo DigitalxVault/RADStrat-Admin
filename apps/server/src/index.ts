@@ -11,9 +11,10 @@ env.validate();
 
 const app = express();
 
-// Middleware
+// Middleware - CORS with configurable origins
+const corsOrigins = env.CORS_ORIGINS.split(',').map(origin => origin.trim());
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
+  origin: corsOrigins,
   credentials: true
 }));
 app.use(express.json({ limit: '1mb' }));
