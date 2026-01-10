@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { env } from '../env.js';
 import { logger } from '../utils/logger.js';
 
-const router = Router();
+const router: Router = Router();
 
 // GA API response structure for /v1/realtime/client_secrets (transcription sessions)
 // Note: Structure is different from conversation sessions!

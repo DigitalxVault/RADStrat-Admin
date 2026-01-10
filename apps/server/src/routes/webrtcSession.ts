@@ -12,7 +12,7 @@ interface TranscriptionSessionResponse {
   };
 }
 
-const router = Router();
+const router: Router = Router();
 
 /**
  * Transcription Session Endpoint - WebSocket Approach

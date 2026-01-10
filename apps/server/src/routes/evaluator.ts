@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { env } from '../env.js';
 import { logger } from '../utils/logger.js';
 
-const router = Router();
+const router: Router = Router();
 
 interface ScoreRequest {
   expectedAnswer: {

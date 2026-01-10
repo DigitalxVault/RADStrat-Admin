@@ -5,7 +5,6 @@ import { logger } from './utils/logger.js';
 import healthRouter from './routes/health.js';
 import transcriptionSessionRouter from './routes/openaiTranscriptionSession.js';
 import evaluatorRouter from './routes/evaluator.js';
-import webrtcSessionRouter from './routes/webrtcSession.js';
 
 // Validate environment
 env.validate();
