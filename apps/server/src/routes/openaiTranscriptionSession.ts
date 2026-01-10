@@ -19,19 +19,42 @@ interface GASessionResponse {
   };
 }
 
+// VAD settings from client (optional, uses defaults if not provided)
+interface VADSettingsRequest {
+  threshold?: number;        // 0.0-1.0, default 0.5
+  prefixPaddingMs?: number;  // default 300
+  silenceDurationMs?: number; // default 500
+}
+
+// Default VAD settings
+const DEFAULT_VAD: Required<VADSettingsRequest> = {
+  threshold: 0.5,
+  prefixPaddingMs: 300,
+  silenceDurationMs: 500
+};
+
 // NOTE: Model selection is NOT supported for transcription sessions via /v1/realtime/client_secrets
 // OpenAI error: "You must not provide a model parameter for transcription sessions."
 // The transcription model is determined automatically by OpenAI.
 // See: https://platform.openai.com/docs/guides/realtime
 
-router.get('/', async (_req: Request, res: ExpressResponse) => {
+// POST endpoint to accept VAD settings from client
+router.post('/', async (req: Request, res: ExpressResponse) => {
   const startTime = Date.now();
 
   try {
+    // Extract VAD settings from request body, use defaults if not provided
+    const vadRequest: VADSettingsRequest = req.body?.vad || {};
+    const vad = {
+      threshold: vadRequest.threshold ?? DEFAULT_VAD.threshold,
+      prefixPaddingMs: vadRequest.prefixPaddingMs ?? DEFAULT_VAD.prefixPaddingMs,
+      silenceDurationMs: vadRequest.silenceDurationMs ?? DEFAULT_VAD.silenceDurationMs
+    };
+
     // NOTE: Model selection is NOT supported for transcription sessions via client_secrets
     // OpenAI error: "You must not provide a model parameter for transcription sessions."
     // The transcription model is determined automatically by OpenAI.
-    logger.info('Creating GA transcription session...');
+    logger.info('Creating GA transcription session...', { vadSettings: vad });
 
     // GA API: Use /v1/realtime/client_secrets endpoint with nested session structure
     const fetchRes: globalThis.Response = await fetch('https://api.openai.com/v1/realtime/client_secrets', {
@@ -61,9 +84,9 @@ router.get('/', async (_req: Request, res: ExpressResponse) => {
               },
               turn_detection: {
                 type: 'server_vad',
-                threshold: 0.5,
-                prefix_padding_ms: 300,
-                silence_duration_ms: 500
+                threshold: vad.threshold,
+                prefix_padding_ms: vad.prefixPaddingMs,
+                silence_duration_ms: vad.silenceDurationMs
               },
               noise_reduction: {
                 type: 'near_field'  // Optimized for close microphone input
