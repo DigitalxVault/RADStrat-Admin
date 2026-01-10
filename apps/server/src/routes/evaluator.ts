@@ -130,7 +130,7 @@ ${body.explanationPrompt}
 
 Provide your evaluation as JSON only, no other text.`;
 
-    const fetchRes = await fetch('https://api.openai.com/v1/chat/completions', {
+    const fetchRes: globalThis.Response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${env.OPENAI_API_KEY}`,

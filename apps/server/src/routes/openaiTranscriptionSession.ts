@@ -34,7 +34,7 @@ router.get('/', async (_req: Request, res: ExpressResponse) => {
     logger.info('Creating GA transcription session...');
 
     // GA API: Use /v1/realtime/client_secrets endpoint with nested session structure
-    const fetchRes = await fetch('https://api.openai.com/v1/realtime/client_secrets', {
+    const fetchRes: globalThis.Response = await fetch('https://api.openai.com/v1/realtime/client_secrets', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${env.OPENAI_API_KEY}`,

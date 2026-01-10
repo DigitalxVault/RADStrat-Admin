@@ -43,7 +43,7 @@ router.get('/', async (_req: Request, res: ExpressResponse) => {
     // Create transcription session with OpenAI
     // Uses /v1/realtime/transcription_sessions for pure transcription (no AI responses)
     // NOTE: Using the documented nested audio.input format for transcription sessions
-    const fetchRes = await fetch('https://api.openai.com/v1/realtime/transcription_sessions', {
+    const fetchRes: globalThis.Response = await fetch('https://api.openai.com/v1/realtime/transcription_sessions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${env.OPENAI_API_KEY}`,
