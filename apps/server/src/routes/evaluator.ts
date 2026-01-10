@@ -1,4 +1,5 @@
-import { Router, Request, Response } from 'express';
+import { Router } from 'express';
+import type { Request, Response as ExpressResponse } from 'express';
 import { env } from '../env.js';
 import { logger } from '../utils/logger.js';
 
@@ -62,7 +63,7 @@ interface ScoreResponse {
   };
 }
 
-router.post('/score', async (req: Request, res: Response) => {
+router.post('/score', async (req: Request, res: ExpressResponse) => {
   const startTime = Date.now();
 
   try {

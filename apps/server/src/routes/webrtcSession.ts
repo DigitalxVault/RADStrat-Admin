@@ -1,4 +1,5 @@
-import { Router, Request, Response } from 'express';
+import { Router } from 'express';
+import type { Request, Response as ExpressResponse } from 'express';
 import { env } from '../env.js';
 import { logger } from '../utils/logger.js';
 
@@ -33,7 +34,7 @@ const router: Router = Router();
  */
 
 // GET /api/webrtc/session - Get ephemeral token for WebSocket transcription
-router.get('/', async (_req: Request, res: Response) => {
+router.get('/', async (_req: Request, res: ExpressResponse) => {
   const startTime = Date.now();
 
   try {
