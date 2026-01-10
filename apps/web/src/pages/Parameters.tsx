@@ -49,6 +49,14 @@ function Parameters() {
     });
   };
 
+  const handleVadChange = (key: keyof NonNullable<Profile['vad']>, value: number) => {
+    if (!activeProfile) return;
+    const currentVad = activeProfile.vad || { threshold: 0.3, prefixPaddingMs: 500, silenceDurationMs: 2000 };
+    handleUpdateProfile({
+      vad: { ...currentVad, [key]: value }
+    });
+  };
+
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -307,6 +315,62 @@ function Parameters() {
             value={activeProfile.benchmarks.passMarkOverall}
             onChange={(e) => handleBenchmarkChange(parseInt(e.target.value))}
           />
+        </div>
+      </div>
+
+      {/* Voice Activity Detection (VAD) Settings */}
+      <div className="paper-card">
+        <h4 style={{ marginBottom: 'var(--space-md)' }}>Voice Activity Detection (VAD)</h4>
+        <p className="text-small text-muted" style={{ marginBottom: 'var(--space-md)' }}>
+          Controls how the OpenAI Realtime API detects speech. Changes apply to new recording sessions.
+        </p>
+        <div className="grid grid-cols-3 gap-md">
+          <div>
+            <label htmlFor="vad-threshold" className="label">
+              Threshold ({((activeProfile.vad?.threshold ?? 0.3) * 100).toFixed(0)}%)
+            </label>
+            <input
+              id="vad-threshold"
+              name="vad-threshold"
+              type="range"
+              min="10"
+              max="90"
+              value={(activeProfile.vad?.threshold ?? 0.3) * 100}
+              onChange={(e) => handleVadChange('threshold', parseInt(e.target.value) / 100)}
+              className="w-full"
+            />
+            <p className="text-small text-muted">Lower = more sensitive to quiet speech</p>
+          </div>
+          <div>
+            <label htmlFor="vad-prefix" className="label">Prefix Padding (ms)</label>
+            <input
+              id="vad-prefix"
+              name="vad-prefix"
+              type="number"
+              min="100"
+              max="2000"
+              step="100"
+              className="input"
+              value={activeProfile.vad?.prefixPaddingMs ?? 500}
+              onChange={(e) => handleVadChange('prefixPaddingMs', parseInt(e.target.value))}
+            />
+            <p className="text-small text-muted">Audio included before speech detected</p>
+          </div>
+          <div>
+            <label htmlFor="vad-silence" className="label">Silence Duration (ms)</label>
+            <input
+              id="vad-silence"
+              name="vad-silence"
+              type="number"
+              min="500"
+              max="5000"
+              step="100"
+              className="input"
+              value={activeProfile.vad?.silenceDurationMs ?? 2000}
+              onChange={(e) => handleVadChange('silenceDurationMs', parseInt(e.target.value))}
+            />
+            <p className="text-small text-muted">Wait time after silence before committing</p>
+          </div>
         </div>
       </div>
     </div>

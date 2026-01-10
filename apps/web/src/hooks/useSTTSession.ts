@@ -1,8 +1,12 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import type { Question, Profile, ScoreResult, TestRun, RunTelemetry, FluencyMetrics } from '../types';
 import { normalizeText } from '../utils/textNormalization';
-import { estimateFluencyMetrics } from '../utils/fluencyMetrics';
+import { estimateFluencyMetrics, calculateFluencyScore } from '../utils/fluencyMetrics';
 import { api } from '../config';
+
+// Storage keys for session persistence
+const STORAGE_KEY_TRANSCRIPT = 'stt-current-transcript';
+const STORAGE_KEY_SCORE = 'stt-current-score';
 
 type SessionStatus = 'idle' | 'connecting' | 'connected' | 'recording' | 'processing' | 'error';
 
@@ -17,6 +21,7 @@ interface UseSTTSessionReturn {
   isRecording: boolean;
   telemetry: Partial<RunTelemetry>;
   preConnect: () => Promise<void>;
+  clearSession: () => void;
 }
 
 interface ScoreRequest {
@@ -71,8 +76,23 @@ interface ScoreRequest {
 export function useSTTSession(onRunComplete?: (run: TestRun) => void): UseSTTSessionReturn {
   const [status, setStatus] = useState<SessionStatus>('idle');
   const [interimTranscript, setInterimTranscript] = useState('');
-  const [finalTranscript, setFinalTranscript] = useState('');
-  const [scoreResult, setScoreResult] = useState<ScoreResult | null>(null);
+  // Restore finalTranscript from localStorage
+  const [finalTranscript, setFinalTranscript] = useState<string>(() => {
+    try {
+      return localStorage.getItem(STORAGE_KEY_TRANSCRIPT) || '';
+    } catch {
+      return '';
+    }
+  });
+  // Restore scoreResult from localStorage
+  const [scoreResult, setScoreResult] = useState<ScoreResult | null>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_SCORE);
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
   const [error, setError] = useState<string | null>(null);
   const [telemetry, setTelemetry] = useState<Partial<RunTelemetry>>({});
 
@@ -109,6 +129,28 @@ export function useSTTSession(onRunComplete?: (run: TestRun) => void): UseSTTSes
       cleanup();
     };
   }, []);
+
+  // Persist finalTranscript to localStorage
+  useEffect(() => {
+    try {
+      if (finalTranscript) {
+        localStorage.setItem(STORAGE_KEY_TRANSCRIPT, finalTranscript);
+      }
+    } catch {
+      // localStorage not available
+    }
+  }, [finalTranscript]);
+
+  // Persist scoreResult to localStorage
+  useEffect(() => {
+    try {
+      if (scoreResult) {
+        localStorage.setItem(STORAGE_KEY_SCORE, JSON.stringify(scoreResult));
+      }
+    } catch {
+      // localStorage not available
+    }
+  }, [scoreResult]);
 
   const cleanup = useCallback(() => {
     console.log('[WebSocket] Cleaning up resources');
@@ -240,11 +282,42 @@ export function useSTTSession(onRunComplete?: (run: TestRun) => void): UseSTTSes
       evaluatorLatencyMs: Date.now() - evalStart
     }));
 
+    // Calculate deterministic fluency score using profile parameters
+    const calculatedFluency = calculateFluencyScore(fluencyMetrics, {
+      fillerPenaltyPerWord: profile.fluency.fillerPenaltyPerWord,
+      fillerPenaltyCap: profile.fluency.fillerPenaltyCap,
+      pausePenalty: profile.fluency.pausePenalty,
+      longPausePenalty: profile.fluency.longPausePenalty,
+      pausePenaltyCap: 20 // Default cap
+    });
+
+    // Use the calculated fluency score instead of LLM's estimate
+    // This makes the fluency penalties in Parameters actually functional
+    const adjustedFluencyScore = calculatedFluency.score;
+
+    // Recalculate overall score using profile weights with the adjusted fluency
+    const adjustedOverallScore = Math.round(
+      result.accuracyScore * profile.weights.accuracy +
+      adjustedFluencyScore * profile.weights.fluency +
+      result.structureScore * profile.weights.structure
+    );
+
     // Determine pass/fail based on profile benchmarks
-    const passed = result.overallScore >= profile.benchmarks.passMarkOverall;
+    const passed = adjustedOverallScore >= profile.benchmarks.passMarkOverall;
+
+    // Add fluency deductions to the reasons
+    const adjustedReasons = {
+      ...result.reasons,
+      fluency: calculatedFluency.deductions.length > 0
+        ? calculatedFluency.deductions.join('; ')
+        : result.reasons.fluency
+    };
 
     return {
       ...result,
+      fluencyScore: adjustedFluencyScore,
+      overallScore: adjustedOverallScore,
+      reasons: adjustedReasons,
       passed
     };
   };
@@ -258,10 +331,19 @@ export function useSTTSession(onRunComplete?: (run: TestRun) => void): UseSTTSes
   }> => {
     console.log('[WebSocket] Creating new transcription session');
 
-    // Step 1: Get ephemeral token from our server
-    console.log('[WebSocket] Requesting ephemeral token...');
+    // Step 1: Get ephemeral token from our server (with optional VAD settings from profile)
+    const vadSettings = profileRef.current?.vad;
+    console.log('[WebSocket] Requesting ephemeral token...', { vadSettings });
     const tokenResponse = await fetch(api.webrtcSession, {
-      method: 'GET',
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        vad: vadSettings ? {
+          threshold: vadSettings.threshold,
+          prefixPaddingMs: vadSettings.prefixPaddingMs,
+          silenceDurationMs: vadSettings.silenceDurationMs
+        } : undefined
+      })
     });
 
     if (!tokenResponse.ok) {
@@ -1016,6 +1098,32 @@ export function useSTTSession(onRunComplete?: (run: TestRun) => void): UseSTTSes
     }, 100);
   }, [finalTranscript, interimTranscript, telemetry, onRunComplete, cleanup, preConnect]);
 
+  /**
+   * Clear the current session state (transcript and score)
+   * Used by the Refresh button to start fresh for the same question
+   */
+  const clearSession = useCallback(() => {
+    setFinalTranscript('');
+    setInterimTranscript('');
+    setScoreResult(null);
+    setError(null);
+    setTelemetry({});
+
+    // Clear refs
+    finalTranscriptRef.current = '';
+    interimTranscriptRef.current = '';
+
+    // Clear localStorage
+    try {
+      localStorage.removeItem(STORAGE_KEY_TRANSCRIPT);
+      localStorage.removeItem(STORAGE_KEY_SCORE);
+    } catch {
+      // localStorage not available
+    }
+
+    console.log('[Session] Cleared session state');
+  }, []);
+
   return {
     status,
     interimTranscript,
@@ -1026,7 +1134,8 @@ export function useSTTSession(onRunComplete?: (run: TestRun) => void): UseSTTSes
     stopSession,
     isRecording: status === 'recording',
     telemetry,
-    preConnect
+    preConnect,
+    clearSession
   };
 }
 

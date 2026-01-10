@@ -13,6 +13,20 @@ interface TranscriptionSessionResponse {
   };
 }
 
+// VAD settings from client (optional, uses defaults if not provided)
+interface VADSettingsRequest {
+  threshold?: number;        // 0.0-1.0, default 0.3
+  prefixPaddingMs?: number;  // default 500
+  silenceDurationMs?: number; // default 2000
+}
+
+// Default VAD settings
+const DEFAULT_VAD: Required<VADSettingsRequest> = {
+  threshold: 0.3,
+  prefixPaddingMs: 500,
+  silenceDurationMs: 2000
+};
+
 const router: Router = Router();
 
 /**
@@ -33,12 +47,23 @@ const router: Router = Router();
  * @see https://platform.openai.com/docs/guides/speech-to-text#streaming-transcriptions
  */
 
-// GET /api/webrtc/session - Get ephemeral token for WebSocket transcription
-router.get('/', async (_req: Request, res: ExpressResponse) => {
+// POST /api/webrtc/session - Get ephemeral token for WebSocket transcription
+// Accepts optional VAD settings in request body
+router.post('/', async (req: Request, res: ExpressResponse) => {
   const startTime = Date.now();
 
   try {
-    logger.info('Creating ephemeral token for transcription session');
+    // Extract VAD settings from request body, use defaults if not provided
+    const vadRequest: VADSettingsRequest = req.body?.vad || {};
+    const vad = {
+      threshold: vadRequest.threshold ?? DEFAULT_VAD.threshold,
+      prefixPaddingMs: vadRequest.prefixPaddingMs ?? DEFAULT_VAD.prefixPaddingMs,
+      silenceDurationMs: vadRequest.silenceDurationMs ?? DEFAULT_VAD.silenceDurationMs
+    };
+
+    logger.info('Creating ephemeral token for transcription session', {
+      vadSettings: vad
+    });
 
     // Create transcription session with OpenAI
     // Uses /v1/realtime/transcription_sessions for pure transcription (no AI responses)
@@ -63,9 +88,9 @@ router.get('/', async (_req: Request, res: ExpressResponse) => {
             },
             turn_detection: {
               type: 'server_vad',
-              threshold: 0.3,           // Sensitive but not too noisy
-              prefix_padding_ms: 500,   // Context before speech detection
-              silence_duration_ms: 2000 // Wait 2 seconds - allows natural pauses in speech
+              threshold: vad.threshold,
+              prefix_padding_ms: vad.prefixPaddingMs,
+              silence_duration_ms: vad.silenceDurationMs
             },
             noise_reduction: {
               type: 'near_field'

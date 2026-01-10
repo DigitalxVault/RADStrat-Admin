@@ -77,6 +77,12 @@ export interface ProfileEvaluator {
 // NOTE: STT model selection is NOT supported by OpenAI Realtime API for transcription sessions.
 // The transcription model is determined automatically by OpenAI.
 
+export interface VADSettings {
+  threshold: number;        // 0.0-1.0, speech detection sensitivity (default 0.3)
+  prefixPaddingMs: number;  // Audio to include before speech detection (default 500)
+  silenceDurationMs: number; // Wait time after silence before committing (default 2000)
+}
+
 export interface Profile {
   id: string;
   name: string;
@@ -86,6 +92,7 @@ export interface Profile {
   fluency: ProfileFluency;
   normalization: ProfileNormalization;
   evaluator: ProfileEvaluator;
+  vad?: VADSettings; // Optional VAD settings (uses server defaults if not specified)
 }
 
 // Scoring Types

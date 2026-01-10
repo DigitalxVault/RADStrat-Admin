@@ -36,6 +36,11 @@
         "temperature": 0.3,
         "scoringPromptTemplate": "You are an expert evaluator for radio/telephone communication training. Evaluate the student's spoken response against the expected answer.\n\nScoring Criteria:\n- accuracyScore (0-100): How well does the content match? Consider semantic meaning, not just exact words. Apply normalization rules.\n- fluencyScore (0-100): Speech clarity and flow. Penalize filler words and long pauses.\n- structureScore (0-100): Proper communication format (receiver callsign, sender callsign, message structure).\n- overallScore: Weighted average using provided weights.\n\nOutput JSON with: accuracyScore, fluencyScore, structureScore, overallScore, passed (boolean), and reasons object with arrays for accuracy, fluency, structure explaining deductions.",
         "explanationPromptTemplate": "For each score below 100, provide specific actionable feedback explaining what was missing or incorrect. Be constructive and educational."
+      },
+      "vad": {
+        "threshold": 0.3,
+        "prefixPaddingMs": 500,
+        "silenceDurationMs": 1500
       }
     },
     {
@@ -74,6 +79,11 @@
         "temperature": 0.3,
         "scoringPromptTemplate": "You are an expert evaluator for radio/telephone communication training. Evaluate the student's spoken response against the expected answer.\n\nScoring Criteria:\n- accuracyScore (0-100): How well does the content match? Consider semantic meaning, not just exact words. Apply normalization rules. Be more lenient with minor transcription errors due to far-field capture.\n- fluencyScore (0-100): Speech clarity and flow. Penalize excessive filler words and very long pauses only.\n- structureScore (0-100): Proper communication format (receiver callsign, sender callsign, message structure).\n- overallScore: Weighted average using provided weights.\n\nOutput JSON with: accuracyScore, fluencyScore, structureScore, overallScore, passed (boolean), and reasons object with arrays for accuracy, fluency, structure explaining deductions.",
         "explanationPromptTemplate": "For each score below 100, provide specific actionable feedback explaining what was missing or incorrect. Be constructive and educational. Consider that far-field audio may have transcription artifacts."
+      },
+      "vad": {
+        "threshold": 0.4,
+        "prefixPaddingMs": 600,
+        "silenceDurationMs": 2500
       }
     },
     {
@@ -112,6 +122,11 @@
         "temperature": 0.2,
         "scoringPromptTemplate": "You are a strict expert evaluator for professional radio/telephone communication certification. Apply rigorous standards.\n\nScoring Criteria:\n- accuracyScore (0-100): Exact content match required. Minor variations acceptable only if meaning is preserved perfectly.\n- fluencyScore (0-100): Professional speech quality. No filler words, clear pronunciation, appropriate pacing.\n- structureScore (0-100): Perfect adherence to communication protocol format.\n- overallScore: Weighted average using provided weights.\n\nOutput JSON with: accuracyScore, fluencyScore, structureScore, overallScore, passed (boolean), and reasons object with arrays for accuracy, fluency, structure explaining all deductions in detail.",
         "explanationPromptTemplate": "Provide detailed professional feedback for certification preparation. Explain exactly what needs improvement to meet professional standards."
+      },
+      "vad": {
+        "threshold": 0.25,
+        "prefixPaddingMs": 400,
+        "silenceDurationMs": 1200
       }
     }
   ]
