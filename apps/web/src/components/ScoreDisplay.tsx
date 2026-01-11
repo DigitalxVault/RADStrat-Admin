@@ -114,20 +114,25 @@ function ScoreDisplay({ score, isLoading }: ScoreDisplayProps) {
         <div>
           <h5 style={{ marginBottom: 'var(--space-sm)' }}>Why not 100%?</h5>
           <div className="paper-card-2">
-            {Object.entries(score.reasons).map(([category, reasons]) => (
-              reasons.length > 0 && (
+            {Object.entries(score.reasons).map(([category, reasons]) => {
+              // Defensive: ensure reasons is an array (LLM responses can vary)
+              const reasonsArray = Array.isArray(reasons)
+                ? reasons
+                : (typeof reasons === 'string' && reasons ? [reasons] : []);
+
+              return reasonsArray.length > 0 && (
                 <div key={category} style={{ marginBottom: 'var(--space-sm)' }}>
                   <p className="mono text-small" style={{ fontWeight: 'bold', marginBottom: '4px', color: 'white' }}>
                     {category.charAt(0).toUpperCase() + category.slice(1)}:
                   </p>
                   <ul style={{ paddingLeft: 'var(--space-md)', margin: 0 }}>
-                    {reasons.map((reason: string, i: number) => (
+                    {reasonsArray.map((reason: string, i: number) => (
                       <li key={i} className="text-small" style={{ color: 'rgba(255, 255, 255, 0.8)' }}>{reason}</li>
                     ))}
                   </ul>
                 </div>
-              )
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
