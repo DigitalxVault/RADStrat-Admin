@@ -8,6 +8,11 @@ import { api } from '../config';
 const STORAGE_KEY_TRANSCRIPT = 'stt-current-transcript';
 const STORAGE_KEY_SCORE = 'stt-current-score';
 
+// Module-level flag to detect fresh page load vs React tab navigation
+// On browser refresh: module reloads, isFirstPageLoad = true
+// On tab navigation: module stays loaded, isFirstPageLoad = false after first render
+let isFirstPageLoad = true;
+
 type SessionStatus = 'idle' | 'connecting' | 'connected' | 'recording' | 'processing' | 'error';
 
 interface UseSTTSessionReturn {
@@ -78,6 +83,15 @@ export function useSTTSession(onRunComplete?: (run: TestRun) => void): UseSTTSes
   const [interimTranscript, setInterimTranscript] = useState('');
   // Restore finalTranscript from sessionStorage (clears on browser refresh, persists on tab nav)
   const [finalTranscript, setFinalTranscript] = useState<string>(() => {
+    if (isFirstPageLoad) {
+      // Fresh page load (browser refresh) - clear storage and start fresh
+      try {
+        sessionStorage.removeItem(STORAGE_KEY_TRANSCRIPT);
+        sessionStorage.removeItem(STORAGE_KEY_SCORE);
+      } catch { /* ignore */ }
+      return '';
+    }
+    // Tab navigation - restore from storage
     try {
       return sessionStorage.getItem(STORAGE_KEY_TRANSCRIPT) || '';
     } catch {
@@ -86,6 +100,11 @@ export function useSTTSession(onRunComplete?: (run: TestRun) => void): UseSTTSes
   });
   // Restore scoreResult from sessionStorage (clears on browser refresh, persists on tab nav)
   const [scoreResult, setScoreResult] = useState<ScoreResult | null>(() => {
+    if (isFirstPageLoad) {
+      // Fresh page load - already cleared above, return null
+      return null;
+    }
+    // Tab navigation - restore from storage
     try {
       const saved = sessionStorage.getItem(STORAGE_KEY_SCORE);
       return saved ? JSON.parse(saved) : null;
@@ -128,6 +147,12 @@ export function useSTTSession(onRunComplete?: (run: TestRun) => void): UseSTTSes
     return () => {
       cleanup();
     };
+  }, []);
+
+  // Mark first page load as complete after initial render
+  // This allows subsequent tab navigations to restore from sessionStorage
+  useEffect(() => {
+    isFirstPageLoad = false;
   }, []);
 
   // Persist finalTranscript to sessionStorage
