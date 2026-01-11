@@ -76,18 +76,18 @@ interface ScoreRequest {
 export function useSTTSession(onRunComplete?: (run: TestRun) => void): UseSTTSessionReturn {
   const [status, setStatus] = useState<SessionStatus>('idle');
   const [interimTranscript, setInterimTranscript] = useState('');
-  // Restore finalTranscript from localStorage
+  // Restore finalTranscript from sessionStorage (clears on browser refresh, persists on tab nav)
   const [finalTranscript, setFinalTranscript] = useState<string>(() => {
     try {
-      return localStorage.getItem(STORAGE_KEY_TRANSCRIPT) || '';
+      return sessionStorage.getItem(STORAGE_KEY_TRANSCRIPT) || '';
     } catch {
       return '';
     }
   });
-  // Restore scoreResult from localStorage
+  // Restore scoreResult from sessionStorage (clears on browser refresh, persists on tab nav)
   const [scoreResult, setScoreResult] = useState<ScoreResult | null>(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY_SCORE);
+      const saved = sessionStorage.getItem(STORAGE_KEY_SCORE);
       return saved ? JSON.parse(saved) : null;
     } catch {
       return null;
@@ -130,25 +130,25 @@ export function useSTTSession(onRunComplete?: (run: TestRun) => void): UseSTTSes
     };
   }, []);
 
-  // Persist finalTranscript to localStorage
+  // Persist finalTranscript to sessionStorage
   useEffect(() => {
     try {
       if (finalTranscript) {
-        localStorage.setItem(STORAGE_KEY_TRANSCRIPT, finalTranscript);
+        sessionStorage.setItem(STORAGE_KEY_TRANSCRIPT, finalTranscript);
       }
     } catch {
-      // localStorage not available
+      // sessionStorage not available
     }
   }, [finalTranscript]);
 
-  // Persist scoreResult to localStorage
+  // Persist scoreResult to sessionStorage
   useEffect(() => {
     try {
       if (scoreResult) {
-        localStorage.setItem(STORAGE_KEY_SCORE, JSON.stringify(scoreResult));
+        sessionStorage.setItem(STORAGE_KEY_SCORE, JSON.stringify(scoreResult));
       }
     } catch {
-      // localStorage not available
+      // sessionStorage not available
     }
   }, [scoreResult]);
 
@@ -1117,12 +1117,12 @@ export function useSTTSession(onRunComplete?: (run: TestRun) => void): UseSTTSes
     finalTranscriptRef.current = '';
     interimTranscriptRef.current = '';
 
-    // Clear localStorage
+    // Clear sessionStorage
     try {
-      localStorage.removeItem(STORAGE_KEY_TRANSCRIPT);
-      localStorage.removeItem(STORAGE_KEY_SCORE);
+      sessionStorage.removeItem(STORAGE_KEY_TRANSCRIPT);
+      sessionStorage.removeItem(STORAGE_KEY_SCORE);
     } catch {
-      // localStorage not available
+      // sessionStorage not available
     }
 
     console.log('[Session] Cleared session state');
